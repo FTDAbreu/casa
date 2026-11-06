@@ -183,8 +183,8 @@ if (typeof module !== 'undefined') module.exports = { lerFaturaBradesco: lerFatu
 'use strict';
 // ============ COLE AQUI o URL do app da Web do Apps Script (termina em /exec) ============
 const SERVIDOR = 'https://script.google.com/macros/s/AKfycbyyBbDiSVytfi5nVsayi1DUmfy6j01BGjBO96bRgNnO4UiCrUe59v44VPM793-NAkv2/exec';
-const VERSAO_APP = '2.1';
-const SERVIDOR_MINIMO = '2.1';
+const VERSAO_APP = '2.2';
+const SERVIDOR_MINIMO = '2.2';
 function versaoMenor(a, b) { const x = String(a || '0').split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
 function quando(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function faturaDoMes(m) { return ((S.dados && S.dados.faturas) || []).find(h => h.mes === m); }
@@ -196,7 +196,7 @@ const LS = {
 };
 const S = {
   cfg: LS.get('sessao', null), tab: 'inicio', sub: null, mes: hojeMes(), dados: null, cache: {},
-  filtro: 'todos', busca: '', filtroCat: '', fatura: null, resultadoFatura: null, carregando: false
+  filtro: 'todos', busca: '', filtroCat: '', lote: null, resultados: null, carregando: false
 };
 const BALDES = ['ESSENCIAL', 'PARA NÓS', 'APOSENTADORIA', 'OBJETIVOS'];
 const COR = { 'ESSENCIAL': 'var(--b3)', 'PARA NÓS': 'var(--b2)', 'APOSENTADORIA': 'var(--b1)', 'OBJETIVOS': 'var(--b4)', 'SEM CATEGORIA': '#9ca3af' };
@@ -391,59 +391,120 @@ function vLanc() {
 
 // ---------- faturas ----------
 function vFaturas() {
-  const d = S.dados, f = S.fatura, r = S.resultadoFatura;
+  const d = S.dados, lote = S.lote, res = S.resultados;
   let corpo = '';
-  if (r) {
-    corpo = `<div class="big1" style="background:color-mix(in srgb,var(--ok) 12%,var(--card))"><div style="font-size:40px">✅</div><div class="v" style="font-size:21px;color:var(--ok)">Fatura importada com sucesso</div><div class="muted">${nomeMes(r.mes)} · ${brl(r.total)}</div></div>
-      <div class="tiles"><div class="tile"><b class="pos">${r.conciliados.length}</b><span>batem com SMS</span></div><div class="tile"><b>${r.novos}</b><span>novos da fatura</span></div><div class="tile"><b style="color:var(--warn)">${r.a_classificar}</b><span>a classificar</span></div></div>
-${r.planilha_substituida ? `<p class="small muted" style="margin:10px 4px">Substituiu ${brl(r.planilha_substituida)} que vinham agrupados da planilha antiga nesse mês.</p>` : ''}<div style="height:12px"></div>
-      ${r.a_classificar ? `<button class="btn" onclick="classificar()">Classificar ${r.a_classificar} compras</button>` : ''}
-      ${r.sem_fatura.length ? `<h2>Chegaram por SMS mas não estão nesta fatura</h2><div class="list">${r.sem_fatura.map(itemHtml).join('')}</div><p class="small muted" style="margin:8px 4px">Normalmente são compras feitas perto do fechamento: devem aparecer na próxima fatura.</p>` : '<p class="small muted center" style="margin:12px 4px">✓ Todas as compras do SMS deste mês estão na fatura.</p>'}
-      <button class="btn sec" onclick="verFatura('${r.mes}')">Ver lançamentos desta fatura</button>
-      <button class="btn sec" onclick="S.resultadoFatura=null;S.fatura=null;render()">Importar outra fatura</button>`;
-  } else if (f) {
-    const qtd = f.linhas.filter(l => !/SALDO ANTERIOR|PAGTO/i.test(l.descricao)).length;
-    corpo = `<div class="big1"><div class="muted">${esc(f.nome)}</div><div class="v">${brl(f.total != null ? f.total : f.cartoes.reduce((s, c) => s + c.total, 0))}</div><div class="muted small">${qtd} lançamentos em ${f.cartoes.length} cartões</div></div>
-      <div class="list">${f.cartoes.map(c => `<div class="item"><div class="ico">💳</div><div class="grow"><div class="t">${esc(primeiro(c.titular))} •••• ${c.cartao}</div></div><div class="v">${brl(c.total)}</div></div>`).join('')}</div>
-      <div class="field" style="margin-top:14px"><label>Esta é a fatura com vencimento em</label><input type="month" id="mesFat" value="${f.mesSugerido || S.mes}" onchange="avisoJa()"></div>
-      <div id="jaBox">${avisoJaHtml(f.mesSugerido || S.mes)}</div>
-      <p class="small muted" style="margin:0 4px 10px">Os lançamentos que vieram da planilha nesse mês serão substituídos pelos da fatura, e as compras do SMS serão marcadas como conferidas.</p>
-      <button class="btn" id="btnImp" onclick="importar()">Importar e conferir</button><button class="btn danger" onclick="S.fatura=null;render()">Cancelar</button>`;
+  if (res) {
+    const ok = res.filter(x => x.r), erros = res.filter(x => !x.r);
+    const aClass = ok.reduce((s, x) => s + (x.r.a_classificar || 0), 0);
+    const semFat = [].concat(...ok.map(x => x.r.sem_fatura || []));
+    corpo = `<div class="big1" style="background:color-mix(in srgb,var(--ok) 12%,var(--card))"><div style="font-size:40px">${erros.length ? '⚠️' : '✅'}</div>
+        <div class="v" style="font-size:21px;color:${erros.length ? 'var(--warn)' : 'var(--ok)'}">${ok.length === 1 && !erros.length ? 'Fatura importada com sucesso' : ok.length + ' de ' + res.length + ' arquivos importados'}</div>
+        <div class="muted">${brl(ok.reduce((s, x) => s + x.r.total, 0))} no total</div></div>
+      <div class="list">${res.map(x => x.r
+        ? `<div class="item" onclick="verFatura('${x.mes}')"><div class="ico" style="background:color-mix(in srgb,var(--ok) 14%,var(--card))">✅</div><div class="grow"><div class="t" style="text-transform:capitalize">${nomeMes(x.mes)}</div><div class="s">${x.r.conciliados.length} conferidas por SMS · ${x.r.novos} da fatura${x.r.a_classificar ? ' · ' + x.r.a_classificar + ' a classificar' : ''}${x.r.planilha_substituida ? '<br>Substituiu ' + brl(x.r.planilha_substituida) + ' da planilha antiga' : ''}</div></div><div class="right"><div class="v">${brl(x.r.total)}</div>${x.r.total_mes && Math.abs(x.r.total_mes - x.r.total) > 0.01 ? `<div class="s">mês: ${brl(x.r.total_mes)}</div>` : ''}<span class="muted">›</span></div></div>`
+        : `<div class="item"><div class="ico">❌</div><div class="grow"><div class="t">${esc(x.nome)}</div><div class="s neg">${esc(x.erro)}</div></div></div>`).join('')}</div>
+      <div style="height:12px"></div>
+      ${aClass ? `<button class="btn" onclick="classificar()">Classificar ${aClass} compras</button>` : ''}
+      ${semFat.length ? `<h2>Chegaram por SMS mas não estão na fatura</h2><div class="list">${semFat.map(itemHtml).join('')}</div><p class="small muted" style="margin:8px 4px">Normalmente são compras feitas perto do fechamento: devem aparecer na próxima fatura.</p>` : ''}
+      ${ok.length === 1 ? `<button class="btn sec" onclick="verFatura('${ok[0].mes}')">Ver lançamentos desta fatura</button>` : ''}
+      <button class="btn sec" onclick="S.resultados=null;S.lote=null;render()">Importar outras faturas</button>`;
+  } else if (lote && lote.length) {
+    const cartoesDe = x => x.f.cartoes.map(c => c.cartao);
+    corpo = lote.map((x, i) => {
+      const f = x.f, qtd = f.linhas.filter(l => !/SALDO ANTERIOR|PAGTO/i.test(l.descricao)).length;
+      return `<div class="card" style="margin-bottom:12px"><div class="row"><div class="grow"><div class="muted small ell">📄 ${esc(x.nome)}</div><div style="font-size:24px;font-weight:800;margin:2px 0">${brl(f.total != null ? f.total : f.cartoes.reduce((s, c) => s + c.total, 0))}</div>
+          <div class="muted small">${qtd} lançamentos · ${f.cartoes.map(c => esc(primeiro(c.titular)) + ' ' + c.cartao).join(', ')}</div></div>
+          <button class="x" onclick="S.lote.splice(${i},1);render()" aria-label="Remover">×</button></div>
+        <div class="field" style="margin:12px 0 8px;box-shadow:none;background:var(--chip)"><label>Fatura com vencimento em</label><input type="month" class="mesLote" value="${x.mes}" onchange="S.lote[${i}].mes=this.value;render()"></div>
+        ${avisoLote(x, i, cartoesDe)}</div>`;
+    }).join('');
+    const bloqueado = false;
+    corpo += `<p class="small muted" style="margin:0 4px 10px">Em cada mês, os valores que vieram da planilha antiga serão substituídos pelos da fatura, e as compras do SMS serão marcadas como conferidas.</p>
+      <button class="btn" id="btnImp" ${bloqueado ? 'disabled' : ''} onclick="importarLote()">${lote.length > 1 ? 'Importar ' + lote.length + ' arquivos' : 'Importar e conferir'}</button>
+      <label class="btn sec" style="display:block;text-align:center;box-sizing:border-box">+ Adicionar mais arquivos<input type="file" multiple accept=".xls,.xlsx,.csv,application/vnd.ms-excel" style="display:none" onchange="lerArquivos(this.files,true)"></label>
+      <button class="btn danger" onclick="S.lote=null;render()">Cancelar</button>`;
   } else {
-    corpo = `<label class="big1" style="display:block;cursor:pointer"><div style="font-size:40px">📄</div><div class="v" style="font-size:20px">Enviar fatura do Bradesco</div><div class="muted small">Arquivo .xls exportado do Internet Banking</div><input type="file" accept=".xls,.xlsx,.csv,application/vnd.ms-excel" style="display:none" onchange="lerArquivo(this.files[0])"></label>
+    corpo = `<label class="big1 dropzone" id="dropzone" style="display:block;cursor:pointer;border:2px dashed var(--line)"><div style="font-size:40px">📄</div><div class="v" style="font-size:20px">Enviar faturas do Bradesco</div><div class="muted small">Toque para escolher ou arraste os arquivos .xls aqui.<br>Pode enviar vários arquivos e vários meses de uma vez.</div><input type="file" multiple accept=".xls,.xlsx,.csv,application/vnd.ms-excel" style="display:none" onchange="lerArquivos(this.files)"></label>
       <details class="card small"><summary><b>Como baixar a fatura</b> <span class="muted">›</span></summary><p class="muted">No site do Bradesco (Internet Banking) → Cartões → Fatura → escolha o mês → botão <b>Salvar em Excel</b>. No iPhone o arquivo vai para o app Arquivos; é só escolhê-lo aqui.</p></details>`;
   }
   const lista = (d.faturas || []).slice().sort((a, b) => b.mes.localeCompare(a.mes));
-  const hist = lista.map(h => `<div class="item" onclick="verFatura('${h.mes}')"><div class="ico" style="background:color-mix(in srgb,var(--ok) 14%,var(--card))">✅</div><div class="grow"><div class="t" style="text-transform:capitalize">${nomeMes(h.mes)}</div><div class="s">Importada em ${quando(h.importado_em)}<br>${h.conciliados} conferidas por SMS · ${h.novos} vindas da fatura</div></div><div class="right"><div class="v">${brl(h.total)}</div><span class="muted">›</span></div></div>`).join('');
+  const hist = lista.map(h => `<div class="item" onclick="verFatura('${h.mes}')"><div class="ico" style="background:color-mix(in srgb,var(--ok) 14%,var(--card))">✅</div><div class="grow"><div class="t" style="text-transform:capitalize">${nomeMes(h.mes)}</div><div class="s">Importada em ${quando(h.importado_em)}<br>${h.conciliados} conferidas por SMS · ${h.novos} vindas da fatura${h.cartoes ? '<br>Cartões: ' + esc(String(h.cartoes).split(',').join(', ')) : ''}</div></div><div class="right"><div class="v">${brl(h.total)}</div><span class="muted">›</span></div></div>`).join('');
   return `<h1>Faturas</h1><p class="muted" style="margin:0 4px 14px">Confira a fatura com as compras que chegaram por SMS.</p>${corpo}
     <h2>Faturas importadas${lista.length ? ' (' + lista.length + ')' : ''}</h2>${hist ? `<div class="list">${hist}</div>` : '<div class="card muted small">Nenhuma fatura importada ainda.</div>'}`;
 }
+function avisoLote(x, i, cartoesDe) {
+  const meus = cartoesDe(x);
+  const outros = S.lote.filter((y, j) => j !== i && y.mes === x.mes);
+  const repetido = outros.find(y => cartoesDe(y).some(c => meus.includes(c)));
+  if (repetido) return `<div class="alert" style="margin:0;cursor:default;background:#fee2e2;color:var(--bad)"><span>❗</span><span>Este arquivo e "${esc(repetido.nome)}" têm os mesmos cartões em ${nomeMes(x.mes)}. Confira o mês ou remova um deles (×).</span></div>`;
+  let html = '';
+  if (outros.length) html += `<div class="alert" style="margin:0 0 8px;cursor:default;background:color-mix(in srgb,var(--pri) 10%,var(--card));color:var(--pri)"><span>➕</span><span>Faz parte da fatura de ${nomeMes(x.mes)} junto com ${outros.map(y => '"' + esc(y.nome) + '"').join(', ')} (outros cartões). Os valores serão somados.</span></div>`;
+  const h = faturaDoMes(x.mes);
+  if (h) {
+    const ja = String(h.cartoes || '').split(',').filter(Boolean);
+    const comuns = meus.filter(c => ja.includes(c));
+    if (!ja.length || comuns.length) html += `<div class="alert" style="margin:0;cursor:default"><span style="font-size:20px">⚠️</span><span>${ja.length ? 'Os cartões ' + comuns.join(', ') + ' de' : 'A fatura de'} ${nomeMes(x.mes)} já foram importados em ${quando(h.importado_em)}.<br><span class="small" style="font-weight:500">Importar de novo substitui esses cartões, sem duplicar.</span></span></div>`;
+    else html += `<div class="alert" style="margin:0;cursor:default;background:color-mix(in srgb,var(--pri) 10%,var(--card));color:var(--pri)"><span>➕</span><span>${nomeMes(x.mes)} já tem os cartões ${ja.join(', ')} importados. Este arquivo traz outros cartões e será somado.</span></div>`;
+  }
+  return html;
+}
 function avisoJaHtml(m) {
   const h = faturaDoMes(m);
-  return h ? `<div class="alert" style="margin:0 0 10px;cursor:default"><span style="font-size:20px">⚠️</span><span>A fatura de ${nomeMes(m)} já foi importada em ${quando(h.importado_em)}.<br><span class="small" style="font-weight:500">Importar de novo substitui a anterior, sem duplicar.</span></span></div>` : '';
+  return h ? `<div class="alert" style="margin:0;cursor:default"><span style="font-size:20px">⚠️</span><span>A fatura de ${nomeMes(m)} já foi importada em ${quando(h.importado_em)}.<br><span class="small" style="font-weight:500">Importar de novo substitui a anterior, sem duplicar.</span></span></div>` : '';
 }
-function avisoJa() { $('#jaBox').innerHTML = avisoJaHtml($('#mesFat').value); }
-function verFatura(m) { S.filtro = 'fatura'; S.filtroCat = ''; S.busca = ''; S.resultadoFatura = null; S.tab = 'lanc'; carregar(m); window.scrollTo(0, 0);
-}
+function verFatura(m) { S.filtro = 'fatura'; S.filtroCat = ''; S.busca = ''; S.resultados = null; S.tab = 'lanc'; carregar(m); window.scrollTo(0, 0); }
 function primeiro(s) { const p = String(s || '').split(' ')[0]; return p.charAt(0) + p.slice(1).toLowerCase(); }
-async function lerArquivo(file) {
-  if (!file) return;
-  if (!window.XLSX) { toast('Carregando leitor… tente de novo em 2s'); return; }
-  try {
-    const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: 'array' });
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
-    const f = lerFaturaBradesco(rows, hojeISO(), +S.dados.config.fechamento || 29);
-    if (!f.linhas.length) { toast('Não reconheci esse arquivo como fatura do Bradesco'); return; }
-    f.nome = file.name; S.fatura = f; render();
-  } catch (e) { toast('Erro ao ler: ' + e.message); }
+async function esperarLeitor() {
+  for (let i = 0; i < 50 && !window.XLSX; i++) await new Promise(r => setTimeout(r, 200));
+  if (!window.XLSX) throw new Error('Não consegui carregar o leitor de Excel. Verifique a internet e tente de novo.');
 }
-async function importar() {
-  const mes = $('#mesFat').value; if (!mes) return toast('Escolha o mês');
-  $('#btnImp').disabled = true; $('#btnImp').innerHTML = '<span class="spin"></span> Conferindo…';
-  try { S.resultadoFatura = await acao({ action: 'fatura', mes, linhas: S.fatura.linhas }, 'Fatura importada'); S.fatura = null; render(); }
-  catch (e) { render(); }
+async function lerArquivos(files, somar) {
+  files = Array.from(files || []).filter(f => /\.(xls|xlsx|csv)$/i.test(f.name) || /excel|spreadsheet|csv/.test(f.type));
+  if (!files.length) { toast('Escolha arquivos .xls da fatura do Bradesco'); return; }
+  S.tab = 'faturas'; S.resultados = null;
+  if (!somar || !S.lote) S.lote = [];
+  try { await esperarLeitor(); } catch (e) { toast(e.message); return; }
+  const ruins = [];
+  for (const file of files) {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+      const f = lerFaturaBradesco(rows, hojeISO(), +S.dados.config.fechamento || 29);
+      if (!f.linhas.length) { ruins.push(file.name); continue; }
+      S.lote.push({ nome: file.name, f, mes: f.mesSugerido || S.mes });
+    } catch (e) { ruins.push(file.name); }
+  }
+  S.lote.sort((a, b) => a.mes.localeCompare(b.mes));
+  render(); window.scrollTo(0, 0);
+  if (ruins.length) toast('Não reconheci como fatura do Bradesco: ' + ruins.join(', '));
 }
+async function importarLote() {
+  const lote = S.lote.slice(), b = $('#btnImp'), out = [];
+  b.disabled = true;
+  setLoading(true);
+  for (let i = 0; i < lote.length; i++) {
+    b.innerHTML = `<span class="spin"></span> Importando ${i + 1} de ${lote.length}…`;
+    try { out.push({ mes: lote[i].mes, nome: lote[i].nome, r: await apiPost({ action: 'fatura', mes: lote[i].mes, linhas: lote[i].f.linhas }) }); }
+    catch (e) { out.push({ mes: lote[i].mes, nome: lote[i].nome, erro: e.message }); }
+  }
+  setLoading(false);
+  invalidar(); await carregar(S.mes, true);
+  S.lote = null; S.resultados = out; render(); window.scrollTo(0, 0);
+  toast(out.every(x => x.r) ? (out.length > 1 ? out.length + ' arquivos importados' : 'Fatura importada') : 'Alguns arquivos não foram importados');
+}
+// arrastar e soltar arquivos em qualquer lugar do app
+['dragenter', 'dragover'].forEach(ev => window.addEventListener(ev, e => {
+  if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+  e.preventDefault(); const z = document.getElementById('dropzone'); if (z) z.style.borderColor = 'var(--pri)';
+}));
+window.addEventListener('dragleave', () => { const z = document.getElementById('dropzone'); if (z) z.style.borderColor = 'var(--line)'; });
+window.addEventListener('drop', e => {
+  if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+  e.preventDefault();
+  if (!S.cfg || !S.dados) { toast('Entre no app antes de enviar faturas'); return; }
+  lerArquivos(e.dataTransfer.files, !!S.lote);
+});
 
 // ---------- mais ----------
 function vMais() {
@@ -456,7 +517,8 @@ function vMais() {
     ${it('cartoes', '💳', 'Cartões', d.cartoes.length + ' cartões')}
     ${it('regras', '🏷️', 'Regras de categoria', d.regras.length + ' regras automáticas')}
     ${it('usuarios', '👥', 'Usuários', (d.usuarios || []).map(u => u.nome).join(', ') || '—')}
-    ${it('conta', '👤', 'Minha conta', 'Conectado como ' + esc(S.cfg.nome || S.cfg.usuario) + ' · trocar senha · sair')}</div>
+    ${it('conta', '👤', 'Minha conta', 'Conectado como ' + esc(S.cfg.nome || S.cfg.usuario) + ' · trocar senha')}</div>
+    <button class="btn sec" style="margin-top:14px;color:var(--bad)" onclick="if(confirm('Sair deste aparelho?'))sair()">Sair (${esc(S.cfg.nome || S.cfg.usuario)})</button>
     <p class="small muted" style="margin:16px 6px">Fechamento das faturas: dia ${esc(d.config.fechamento)}. Compras a partir desse dia entram na fatura do mês seguinte.</p>
     <p class="small muted" style="margin:6px;text-align:center">App versão ${VERSAO_APP} · Servidor versão ${esc(d.versao || '1.0')}${versaoMenor(d.versao || '1.0', SERVIDOR_MINIMO) ? ' ⚠️ atualize o servidor' : ''}</p>`;
 }
@@ -635,7 +697,7 @@ function editar(id) {
     ${catGrid(l.tipo, l.categoria, 'marcaCatEd')}
     <div class="chk" id="regraBox" style="display:${l.categoria ? 'none' : 'flex'}"><input type="checkbox" id="er" ${l.categoria ? '' : 'checked'}><span>Sempre que tiver <input type="text" id="ep" value="${esc(sugerePadrao(l.descricao))}"> usar esta categoria</span></div>
     <div class="row" style="gap:10px"><div class="field grow"><label>Mês de referência</label><input id="em" type="month" value="${l.mes}"></div><div class="field grow"><label>Pessoa</label><input id="epe" value="${esc(l.pessoa)}"></div></div>
-    <p class="small muted" style="margin:0 4px 10px">${esc([dataBonita(l.data), l.cartao ? '•••• ' + l.cartao : '', l.parcela ? 'parcela ' + l.parcela : '', 'origem: ' + l.origem, l.conciliado ? 'conferido na fatura ' + l.conciliado : ''].filter(Boolean).join(' · '))}</p>
+    <p class="small muted" style="margin:0 4px 10px">${esc([dataBonita(l.data), l.cartao ? '•••• ' + l.cartao : '', l.parcela ? 'parcela ' + l.parcela : '', 'origem: ' + l.origem, l.conciliado ? 'conferido na fatura de ' + nomeMes(String(l.conciliado).split('|')[0]) : ''].filter(Boolean).join(' · '))}</p>
     <button class="btn" onclick="salvarEd('${esc(l.id)}')">Salvar</button><button class="btn danger" onclick="if(confirm('Excluir este lançamento?')){closeSheet();acao({action:'excluir',id:'${esc(l.id)}'},'Excluído')}">Excluir</button>`);
 }
 function marcaCatEd(nome, el) { marcaCat(nome, el); $('#regraBox').style.display = 'flex'; }
