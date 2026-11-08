@@ -115,7 +115,29 @@ h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;
 .setup{min-height:90vh;display:flex;flex-direction:column;justify-content:center}
 .logo{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--pri),var(--pri2));display:grid;place-items:center;font-size:38px;margin-bottom:12px;box-shadow:0 10px 30px rgba(79,70,229,.3)}
 details summary{cursor:pointer;list-style:none}
-.brand,.fab-txt,.side-foot{display:none}
+.brand,.fab-txt,.side-foot,.tabs .so-pc{display:none}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.kpi{background:var(--card);border-radius:16px;padding:12px 14px;box-shadow:var(--shadow)}.kpi span{display:block;font-size:12px;color:var(--sub)}.kpi b{font-size:19px}.kpi small{display:block;font-size:11px;color:var(--sub)}
+.kpis .kpi:first-child{grid-column:1/-1}
+.tabela-wrap{overflow-x:auto;background:var(--card);border-radius:16px;box-shadow:var(--shadow);-webkit-overflow-scrolling:touch}
+.tabela{--c0:150px;--cm:66px;--ct:80px;border-collapse:separate;border-spacing:0;font-size:13px;white-space:nowrap;table-layout:fixed;width:calc(var(--c0) + 12 * var(--cm) + var(--ct))}
+.tabela col.k0{width:var(--c0)}.tabela col.km{width:var(--cm)}.tabela col.kt{width:var(--ct)}
+.tabela th,.tabela td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+.tabela th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);font-weight:600;position:sticky;top:0;background:var(--card)}
+.tabela .c0{text-align:left;position:sticky;left:0;background:var(--card);z-index:1;overflow:hidden;text-overflow:ellipsis;box-shadow:1px 0 0 var(--line)}
+@media (min-width: 900px){.tabela{--c0:220px;--cm:calc((100% - 220px - 92px) / 12);--ct:92px;width:100%;min-width:1080px}}
+.tabela th.c0{z-index:2}
+.tabela .hoje{background:color-mix(in srgb,var(--pri) 7%,var(--card))}
+.tabela .tot{font-weight:700;background:var(--chip)}
+.tabela tr.grp td{font-weight:700;background:color-mix(in srgb,var(--chip) 60%,var(--card));cursor:pointer}
+.tabela tr.grp td.c0{background:color-mix(in srgb,var(--chip) 60%,var(--card))}
+.tabela tr.sub td.c0{padding-left:18px;color:var(--txt)}.tabela tr.sub .ic{margin-right:6px}
+.tabela td.clic{cursor:pointer}.tabela td.clic:hover{color:var(--pri);text-decoration:underline}
+.tabela tr.sum td{font-weight:700;border-top:2px solid var(--line)}
+.mesgrid{display:grid;gap:12px}
+.mescard.atual{outline:2px solid var(--pri)}
+.tri{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 4px}.tri span{display:block;font-size:11px;color:var(--sub)}.tri b{font-size:15px}
+.lbar{margin-top:10px}
 .toolbar .search{margin-bottom:10px}
 /* ===== Computador / tablet na horizontal ===== */
 @media (min-width: 900px){
@@ -155,6 +177,12 @@ details summary{cursor:pointer;list-style:none}
   .sheet.on{transform:translate(-50%,-50%);opacity:1;pointer-events:auto}
   .grab{display:none}
   .catgrid{grid-template-columns:repeat(5,1fr)}
+  .tabs .so-pc{display:flex}
+  .wrap.tab-ano{max-width:1500px}
+  .wrap.tab-acomp{max-width:1280px}
+  .kpis{grid-template-columns:repeat(5,1fr)}.kpis .kpi:first-child{grid-column:auto}
+  .tabela{font-size:13.5px}.tabela th,.tabela td{padding:9px 10px}
+  .mesgrid{grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
   .setup{max-width:440px;margin:0 auto}
   body:has(.setup){padding-left:0}
 }details summary::-webkit-details-marker{display:none}
@@ -239,8 +267,8 @@ if (typeof module !== 'undefined') module.exports = { lerFaturaBradesco: lerFatu
 'use strict';
 // ============ COLE AQUI o URL do app da Web do Apps Script (termina em /exec) ============
 const SERVIDOR = 'https://script.google.com/macros/s/AKfycbyyBbDiSVytfi5nVsayi1DUmfy6j01BGjBO96bRgNnO4UiCrUe59v44VPM793-NAkv2/exec';
-const VERSAO_APP = '2.2.2';
-const SERVIDOR_MINIMO = '2.2.2';
+const VERSAO_APP = '3.0';
+const SERVIDOR_MINIMO = '3.0';
 function versaoMenor(a, b) { const x = String(a || '0').split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
 function quando(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function faturaDoMes(m) { return ((S.dados && S.dados.faturas) || []).find(h => h.mes === m); }
@@ -325,6 +353,29 @@ async function acao(body, msg) {
   finally { setLoading(false); }
 }
 
+// ---------- alertas ----------
+function ehCartao(l) { return l.tipo !== 'receita' && l.origem !== 'fixo' && (!!l.cartao || ['sms', 'fatura', 'planilha', 'previsto'].includes(l.origem)); }
+function totaisMes(d) {
+  let rec = 0, desp = 0, cart = 0;
+  (d.lancamentos || []).forEach(l => { const v = +l.valor || 0; if (l.tipo === 'receita') rec += v; else { desp += v; if (ehCartao(l)) cart += v; } });
+  return { rec, desp, cart };
+}
+/** Avalia os alertas de um mês a partir dos totais. */
+function avaliarAlertas(t, cfg) {
+  const out = [], lim = +cfg.limite_cartao || 0, pct = +cfg.alerta_pct || 80;
+  if (lim) {
+    const uso = t.cart / lim * 100;
+    if (uso >= 100) out.push({ nivel: 'alto', tipo: 'cartao', txt: `Cartões passaram o limite em ${brl0(t.cart - lim)} (${uso.toFixed(0)}% de ${brl0(lim)})` });
+    else if (uso >= pct) out.push({ nivel: 'medio', tipo: 'cartao', txt: `Cartões em ${uso.toFixed(0)}% do limite: faltam ${brl0(lim - t.cart)} para ${brl0(lim)}` });
+  }
+  if (t.rec > 0 && t.desp > t.rec) out.push({ nivel: 'alto', tipo: 'salario', txt: `Gastos do mês passaram o salário em ${brl0(t.desp - t.rec)}` });
+  return out;
+}
+function alertasDoMes(d, mes) { return d && d.mes === mes ? avaliarAlertas(totaisMes(d), d.config || {}) : []; }
+function bannerAlertas(lista) {
+  return lista.map(a => `<button class="alert" style="${a.nivel === 'alto' ? 'background:#fee2e2;color:var(--bad)' : ''}" onclick="irTab('acomp')"><span style="font-size:22px">${a.nivel === 'alto' ? '⛔' : '⚠️'}</span><span>${a.txt}</span><span class="go">›</span></button>`).join('');
+}
+
 // ---------- cálculo do mês ----------
 function resumo(d) {
   const L = d.lancamentos;
@@ -344,7 +395,9 @@ const ICON = {
   inicio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   lanc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>',
   faturas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20M6 15h4"/></svg>',
-  mais: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>'
+  mais: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>',
+  acomp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>',
+  ano: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M8 13h2M14 13h2M8 17h2M14 17h2"/></svg>'
 };
 function render() {
   const app = $('#app');
@@ -353,16 +406,16 @@ function render() {
     app.innerHTML = `<div class="wrap"><div class="empty">${S.erro ? '⚠️ ' + esc(S.erro) + '<br><br><button class="btn sec" onclick="S.erro=null;carregar()">Tentar de novo</button><button class="btn danger" onclick="sair()">Sair</button>' : '<span class="spin"></span>'}</div></div>`;
     return;
   }
-  const views = { inicio: vInicio, lanc: vLanc, faturas: vFaturas, mais: vMais };
+  const views = { inicio: vInicio, lanc: vLanc, faturas: vFaturas, mais: vMais, ano: vAno, acomp: vAcomp };
   app.innerHTML = '<div class="wrap tab-' + S.tab + '">' + views[S.tab]() + '</div>' + vTabs();
 }
 function vTabs() {
   const n = S.dados.pendentes.length;
-  const b = (id, nome) => `<button class="${S.tab === id ? 'on' : ''}" onclick="irTab('${id}')">${ICON[id]}${id === 'inicio' && n ? `<span class="badge">${n}</span>` : ''}<span>${nome}</span></button>`;
-  return `<nav class="tabs"><div class="brand"><span class="logo-s">🏠</span>Controle da Casa</div>${b('inicio', 'Início')}${b('lanc', 'Lançamentos')}<button class="fab" onclick="abrirNovo()" aria-label="Novo"><span class="fab-plus">+</span><span class="fab-txt">Novo lançamento</span></button>${b('faturas', 'Faturas')}${b('mais', 'Mais')}
+  const b = (id, nome, cls) => `<button class="${S.tab === id ? 'on' : ''} ${cls || ''}" onclick="irTab('${id}')">${ICON[id]}${id === 'inicio' && n ? `<span class="badge">${n}</span>` : ''}${id === 'acomp' && alertasDoMes(S.dados, S.dados.hoje).length ? `<span class="badge">!</span>` : ''}<span>${nome}</span></button>`;
+  return `<nav class="tabs"><div class="brand"><span class="logo-s">🏠</span>Controle da Casa</div>${b('inicio', 'Início')}${b('lanc', 'Lançamentos')}<button class="fab" onclick="abrirNovo()" aria-label="Novo"><span class="fab-plus">+</span><span class="fab-txt">Novo lançamento</span></button>${b('acomp', 'Mês a mês', 'so-pc')}${b('ano', 'Visão anual', 'so-pc')}${b('faturas', 'Faturas')}${b('mais', 'Mais')}
     <div class="side-foot">${esc(S.cfg.nome || '')} · <a href="#" onclick="if(confirm('Sair deste aparelho?'))sair();return false">Sair</a></div></nav>`;
 }
-function irTab(t) { S.tab = t; S.sub = null; render(); window.scrollTo(0, 0); }
+function irTab(t) { S.tab = t; S.sub = null; render(); window.scrollTo(0, 0); if (t === 'ano' || t === 'acomp') carregarAno(S.anoSel || S.mes.slice(0, 4)); }
 function mudaMes(k) { carregar(somaMes(S.mes, k)); }
 function vMesBar() {
   return `<div class="monthbar"><button onclick="mudaMes(-1)" aria-label="Mês anterior">‹</button><div class="m">${nomeMes(S.mes)}</div><button onclick="mudaMes(1)" aria-label="Próximo mês">›</button></div>`;
@@ -388,10 +441,11 @@ function vInicio() {
     ${(() => { const h = faturaDoMes(S.mes); return h
       ? `<button class="alert" style="background:color-mix(in srgb,var(--ok) 14%,var(--card));color:var(--ok)" onclick="irTab('faturas')"><span style="font-size:22px">🧾</span><span>Fatura de ${MESES[+S.mes.slice(5, 7) - 1]} importada<br><span class="small" style="font-weight:500">em ${quando(h.importado_em)} · ${brl0(h.total)}</span></span><span class="go">›</span></button>`
       : (S.mes <= S.dados.hoje ? `<button class="alert" style="background:var(--card);color:var(--sub);box-shadow:var(--shadow)" onclick="irTab('faturas')"><span style="font-size:22px">🧾</span><span>Fatura de ${MESES[+S.mes.slice(5, 7) - 1]} ainda não importada</span><span class="go">›</span></button>` : ''); })()}
+    ${bannerAlertas(avaliarAlertas(totaisMes(d), d.config || {}))}
     ${pend ? `<button class="alert" onclick="classificar()"><span style="font-size:22px">🔔</span><span>${pend} ${pend > 1 ? 'compras' : 'compra'} para classificar</span><span class="go">›</span></button>` : ''}</div>
     <div class="d-b"><h2>Divisão pela renda <span style="text-transform:none;letter-spacing:0;font-weight:400">· traço = ideal</span></h2><div class="card">${baldes}</div></div>
     <div class="d-c"><h2>Maiores gastos</h2><div class="card">${cats || '<div class="muted">Nenhum gasto neste mês.</div>'}</div></div>
-    <div class="d-d"><h2>${S.mes.slice(0, 4)} mês a mês</h2><div class="card"><div class="year">${ano}</div>
+    <div class="d-d"><h2>${S.mes.slice(0, 4)} mês a mês <a href="#" onclick="irTab('ano');return false" style="float:right;text-transform:none;letter-spacing:0;color:var(--pri);font-weight:600">Visão anual ›</a></h2><div class="card"><div class="year">${ano}</div>
       <div class="legend"><span><i style="background:var(--pri);opacity:.5"></i>Despesas</span><span><i style="background:var(--ok);height:3px;vertical-align:3px"></i>Receitas</span><span class="grow right">Acumulado: <b class="${saldoAno < 0 ? 'neg' : 'pos'}">${brl0(saldoAno)}</b></span></div></div></div></div>`;
 }
 function filtrarCat(c) { S.filtroCat = c; S.filtro = 'todos'; irTab('lanc'); }
@@ -444,6 +498,115 @@ function vLanc() {
     ${S.filtroCat ? `<div class="chips"><button class="chip on" onclick="S.filtroCat='';render()">${esc(S.filtroCat)} ✕</button></div>` : ''}
     <div class="sum"><span class="muted">${L.length} lançamentos${f === 'pend' ? ' (todos os meses)' : ''}</span><b class="${tot < 0 ? '' : 'pos'}">${brl(tot)}</b></div>
     ${html || '<div class="empty">Nada por aqui.</div>'}`;
+}
+
+// ---------- visão anual e mês a mês ----------
+const GRUPOS = [
+  { id: 'receita', nome: 'Salários e receitas', ic: '💼' },
+  { id: 'fixo', nome: 'Despesas fixas', ic: '🔁' },
+  { id: 'cartao', nome: 'Cartões', ic: '💳' },
+  { id: 'outro', nome: 'Outros gastos (Pix, débito, dinheiro)', ic: '💵' }
+];
+async function carregarAno(ano) {
+  S.anoSel = ano;
+  if (S.anoCache && S.anoCache[ano]) { S.ano = S.anoCache[ano]; render(); }
+  setLoading(true);
+  try { const a = await apiGet({ action: 'ano', ano }); S.anoCache = S.anoCache || {}; S.anoCache[ano] = a; if (S.anoSel === ano) { S.ano = a; render(); } }
+  catch (e) { toast('Erro: ' + e.message); }
+  finally { setLoading(false); }
+}
+function mudaAno(k) { carregarAno(String(+(S.anoSel || S.mes.slice(0, 4)) + k)); }
+function vAnoBar() {
+  const a = S.anoSel || S.mes.slice(0, 4);
+  return `<div class="monthbar"><button onclick="mudaAno(-1)" aria-label="Ano anterior">‹</button><div class="m">${a}</div><button onclick="mudaAno(1)" aria-label="Próximo ano">›</button></div>`;
+}
+const somaArr = arr => arr.reduce((s, v) => s + v, 0);
+function totaisAno(a) {
+  const z = () => Array(12).fill(0), t = { receita: z(), fixo: z(), cartao: z(), outro: z() };
+  Object.keys(t).forEach(g => Object.values(a.grupos[g] || {}).forEach(v => v.forEach((x, i) => { t[g][i] += x; })));
+  t.desp = t.fixo.map((x, i) => x + t.cartao[i] + t.outro[i]);
+  t.saldo = t.receita.map((x, i) => x - t.desp[i]);
+  let ac = 0; t.acum = t.saldo.map(x => (ac += x));
+  return t;
+}
+function verCelula(m, cat, grupo) {
+  S.mes = (S.anoSel || S.mes.slice(0, 4)) + '-' + String(m + 1).padStart(2, '0');
+  S.filtroCat = cat || ''; S.busca = ''; S.filtro = grupo === 'cartao' ? 'cartao' : grupo === 'fixo' ? 'fixos' : grupo === 'receita' ? 'receitas' : 'todos';
+  S.tab = 'lanc'; carregar(S.mes); window.scrollTo(0, 0);
+}
+function vAno() {
+  const a = S.ano && S.ano.ano === (S.anoSel || S.mes.slice(0, 4)) ? S.ano : null;
+  if (!a) return `<h1>Visão anual</h1>${vAnoBar()}<div class="empty"><span class="spin"></span></div>`;
+  const t = totaisAno(a), abertos = S.anoAbertos || (S.anoAbertos = { receita: true, fixo: true, cartao: true, outro: true });
+  const fmtc = v => v ? brl0(v).replace('R$', '').trim() : '<span class="muted">–</span>';
+  const meses = MESES.map(m => m.slice(0, 3));
+  const hojeM = a.hoje.slice(0, 4) === a.ano ? +a.hoje.slice(5, 7) - 1 : -1;
+  const th = `<tr><th class="c0">Categoria</th>${meses.map((m, i) => `<th class="${i === hojeM ? 'hoje' : ''}">${m}</th>`).join('')}<th class="tot">Total</th></tr>`;
+  let rows = '';
+  GRUPOS.forEach(gr => {
+    const cats = Object.entries(a.grupos[gr.id] || {}).sort((x, y) => somaArr(y[1]) - somaArr(x[1]));
+    if (!cats.length) return;
+    const tot = t[gr.id], ab = abertos[gr.id];
+    rows += `<tr class="grp" onclick="S.anoAbertos['${gr.id}']=!S.anoAbertos['${gr.id}'];render()"><td class="c0">${ab ? '▾' : '▸'} ${gr.ic} ${gr.nome}</td>${tot.map((v, i) => `<td class="${i === hojeM ? 'hoje' : ''}">${fmtc(v)}</td>`).join('')}<td class="tot">${fmtc(somaArr(tot))}</td></tr>`;
+    if (ab) cats.forEach(([cat, v]) => {
+      const ci = catInfo(cat.split(' · ')[0]), catFiltro = gr.id === 'receita' ? '' : cat;
+      rows += `<tr class="sub"><td class="c0"><span class="ic">${gr.id === 'receita' ? '💰' : (ci.icone || '❓')}</span>${esc(cat)}</td>${v.map((x, i) => `<td class="${i === hojeM ? 'hoje' : ''} ${x ? 'clic' : ''}" ${x ? `onclick="verCelula(${i},'${esc(catFiltro)}','${gr.id}')"` : ''}>${fmtc(x)}</td>`).join('')}<td class="tot">${fmtc(somaArr(v))}</td></tr>`;
+    });
+  });
+  rows += `<tr class="sum"><td class="c0">Total de despesas</td>${t.desp.map((v, i) => `<td class="${i === hojeM ? 'hoje' : ''}">${fmtc(v)}</td>`).join('')}<td class="tot">${fmtc(somaArr(t.desp))}</td></tr>`;
+  rows += `<tr class="sum"><td class="c0">Saldo do mês</td>${t.saldo.map((v, i) => `<td class="${i === hojeM ? 'hoje' : ''} ${v < 0 ? 'neg' : 'pos'}">${fmtc(v)}</td>`).join('')}<td class="tot ${somaArr(t.saldo) < 0 ? 'neg' : 'pos'}">${fmtc(somaArr(t.saldo))}</td></tr>`;
+  rows += `<tr class="sum"><td class="c0">Saldo acumulado</td>${t.acum.map((v, i) => `<td class="${i === hojeM ? 'hoje' : ''} ${v < 0 ? 'neg' : 'pos'}">${fmtc(v)}</td>`).join('')}<td class="tot"></td></tr>`;
+  const R = somaArr(t.receita), D = somaArr(t.desp), C = somaArr(t.cartao), F = somaArr(t.fixo);
+  const kpi = (l, v, cls, sub) => `<div class="kpi"><span>${l}</span><b class="${cls || ''}">${brl0(v)}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  const cols = `<colgroup><col class="k0">${'<col class="km">'.repeat(12)}<col class="kt"></colgroup>`;
+  return `<h1>Visão anual</h1>${vAnoBar()}
+    <div class="kpis">${kpi('Receitas', R)}${kpi('Despesas', D)}${kpi('Saldo do ano', R - D, R - D < 0 ? 'neg' : 'pos')}${kpi('Fixos', F, '', R ? (F / R * 100).toFixed(0) + '% da renda' : '')}${kpi('Cartões', C, '', R ? (C / R * 100).toFixed(0) + '% da renda' : '')}</div>
+    <p class="small muted" style="margin:14px 4px 8px">Toque num grupo para abrir ou fechar. Toque num valor para ver os lançamentos.</p>
+    <div class="tabela-wrap"><table class="tabela">${cols}${th}${rows}</table></div>`;
+}
+function vAcomp() {
+  const a = S.ano && S.ano.ano === (S.anoSel || S.mes.slice(0, 4)) ? S.ano : null;
+  const cfg = (S.dados && S.dados.config) || {};
+  const lim = +cfg.limite_cartao || 0, pct = +cfg.alerta_pct || 80;
+  const conf = `<div class="card" style="margin-bottom:6px"><div class="row" style="flex-wrap:wrap;gap:10px">
+      <div class="field grow" style="margin:0;min-width:180px;box-shadow:none;background:var(--chip)"><label>Limite mensal dos cartões</label><input id="limC" inputmode="decimal" placeholder="Ex.: 15000" value="${lim ? String(lim).replace('.', ',') : ''}"></div>
+      <div class="field" style="margin:0;width:150px;box-shadow:none;background:var(--chip)"><label>Avisar ao chegar em</label><input id="pctC" inputmode="numeric" value="${pct}" style="width:70%">%</div>
+      <button class="btn" style="width:auto;padding:12px 22px;margin:0" onclick="salvarLimite()">Salvar</button></div>
+      <p class="small muted" style="margin:10px 2px 0">Os alertas aparecem aqui e no Início: ⚠️ quando os cartões chegam a ${pct}% do limite, ⛔ quando passam do limite e ⛔ quando os gastos do mês passam do salário.${lim ? '' : ' <b>Defina um limite para ativar o alerta dos cartões.</b>'}</p></div>`;
+  if (!a) return `<h1>Mês a mês</h1>${vAnoBar()}${conf}<div class="empty"><span class="spin"></span></div>`;
+  const t = totaisAno(a), hojeM = a.hoje.slice(0, 4) === a.ano ? +a.hoje.slice(5, 7) - 1 : -1;
+  const cards = MESES.map((nome, i) => {
+    const tt = { rec: t.receita[i], desp: t.desp[i], cart: t.cartao[i] };
+    if (!tt.rec && !tt.desp) return '';
+    const al = avaliarAlertas(tt, cfg), uso = lim ? tt.cart / lim * 100 : 0;
+    const cor = !lim ? 'var(--pri)' : uso >= 100 ? 'var(--bad)' : uso >= pct ? 'var(--b3)' : 'var(--ok)';
+    const usoS = tt.rec ? tt.desp / tt.rec * 100 : 0;
+    const mesId = a.ano + '-' + String(i + 1).padStart(2, '0');
+    const futuro = i > hojeM && hojeM >= 0, temFat = (a.faturas || []).includes(mesId);
+    return `<div class="card mescard ${i === hojeM ? 'atual' : ''}" id="mc${i}">
+      <div class="row"><b class="grow" style="text-transform:capitalize;font-size:17px">${nome}${i === hojeM ? ' <span class="tag sms">atual</span>' : ''}${futuro ? ' <span class="tag">previsão</span>' : ''}</b>
+        <span class="small muted">${temFat ? '🧾 fatura importada' : ''}</span></div>
+      <div class="tri"><div><span>Receitas</span><b>${brl0(tt.rec)}</b></div><div><span>Gastos</span><b>${brl0(tt.desp)}</b></div><div><span>Saldo</span><b class="${tt.rec - tt.desp < 0 ? 'neg' : 'pos'}">${brl0(tt.rec - tt.desp)}</b></div></div>
+      <div class="lbar"><div class="row small"><span class="grow">💳 Cartões ${brl0(tt.cart)}</span><span class="muted">${lim ? uso.toFixed(0) + '% de ' + brl0(lim) : 'sem limite'}</span></div>
+        <div class="bar" style="margin-top:6px"><i style="width:${Math.min(100, lim ? uso : 0)}%;background:${cor}"></i>${lim ? `<span class="ideal" style="left:${Math.min(pct, 100)}%"></span>` : ''}</div></div>
+      <div class="lbar"><div class="row small"><span class="grow">📊 Gastos × salário</span><span class="muted">${tt.rec ? usoS.toFixed(0) + '%' : '–'}</span></div>
+        <div class="bar" style="margin-top:6px"><i style="width:${Math.min(100, usoS)}%;background:${usoS > 100 ? 'var(--bad)' : usoS >= 90 ? 'var(--b3)' : 'var(--ok)'}"></i></div></div>
+      ${al.map(x => `<div class="small" style="margin-top:8px;font-weight:600;color:${x.nivel === 'alto' ? 'var(--bad)' : 'var(--warn)'}">${x.nivel === 'alto' ? '⛔' : '⚠️'} ${x.txt}</div>`).join('')}
+      <button class="btn sec small" style="margin-top:10px;padding:9px;font-size:14px" onclick="S.tab='inicio';carregar('${mesId}');scrollTo(0,0)">Ver o mês ›</button></div>`;
+  }).join('');
+  const nAlertas = MESES.reduce((n, _, i) => n + avaliarAlertas({ rec: t.receita[i], desp: t.desp[i], cart: t.cartao[i] }, cfg).length, 0);
+  setTimeout(() => { const el = document.getElementById('mc' + hojeM); if (el && !S._rolouAcomp) { S._rolouAcomp = true; el.scrollIntoView({ block: 'center' }); } }, 50);
+  return `<h1>Mês a mês</h1>${vAnoBar()}${conf}
+    <h2>${nAlertas ? nAlertas + ' alerta' + (nAlertas > 1 ? 's' : '') + ' em ' + a.ano : 'Nenhum alerta em ' + a.ano}</h2><div class="mesgrid">${cards || '<div class="empty">Sem dados neste ano.</div>'}</div>`;
+}
+async function salvarLimite() {
+  const v = $('#limC').value.trim(), p = $('#pctC').value.trim() || '80';
+  try {
+    await apiPost({ action: 'config_salvar', chave: 'limite_cartao', valor: v });
+    await apiPost({ action: 'config_salvar', chave: 'alerta_pct', valor: p });
+    invalidar(); S.anoCache = {}; await carregar(S.mes, true); await carregarAno(S.anoSel || S.mes.slice(0, 4));
+    toast(v ? 'Limite salvo' : 'Limite removido');
+  } catch (e) { toast('Erro: ' + e.message); }
 }
 
 // ---------- faturas ----------
@@ -567,12 +730,15 @@ window.addEventListener('drop', e => {
 // ---------- mais ----------
 function vMais() {
   if (S.sub) return { parcelas: vParcelas, fixos: vFixos, cartoes: vCartoes, regras: vRegras, conta: vConta, usuarios: vUsuarios, sms: vSms }[S.sub]();
+  const it2 = (tab, ic, t, s) => `<div class="item" onclick="irTab('${tab}')"><div class="ico">${ic}</div><div class="grow"><div class="t">${t}</div><div class="s">${s}</div></div><span class="muted">›</span></div>`;
   const it = (id, ic, t, s) => `<div class="item" onclick="S.sub='${id}';render();scrollTo(0,0)"><div class="ico">${ic}</div><div class="grow"><div class="t">${t}</div><div class="s">${s}</div></div><span class="muted">›</span></div>`;
   const d = S.dados, prox = d.parcelas[0];
   const st = d.sms_status || {};
   const smsResumo = st.ultimo ? 'Último recebido ' + haQuanto(st.ultimo.criado) + ' · ' + esc(st.ultimo.descricao)
     : (st.em ? '⚠️ Chegou mensagem ' + haQuanto(st.em) + ', mas não foi reconhecida' : 'Nenhum SMS recebido pelo atalho ainda');
   return `<h1>Mais</h1><div class="list menu" style="margin-top:14px">
+    ${it2('acomp', '📈', 'Mês a mês e alertas', S.dados.config.limite_cartao ? 'Limite dos cartões: ' + brl0(S.dados.config.limite_cartao) : 'Configure o limite dos cartões')}
+    ${it2('ano', '🗓️', 'Visão anual', 'Salários, fixos e cartões mês a mês')}
     ${it('sms', st.ultimo ? '📩' : '📭', 'Leitura de SMS', smsResumo)}
     ${it('parcelas', '📆', 'Parcelas futuras', prox ? 'Próximo mês: ' + brl0(prox.total) + ' já comprometidos' : 'Nenhuma parcela futura')}
     ${it('fixos', '🔁', 'Salários e gastos fixos', d.recorrentes.length + ' itens')}
