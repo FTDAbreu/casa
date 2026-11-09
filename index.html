@@ -283,8 +283,8 @@ if (typeof module !== 'undefined') module.exports = { lerFaturaBradesco: lerFatu
 'use strict';
 // ============ COLE AQUI o URL do app da Web do Apps Script (termina em /exec) ============
 const SERVIDOR = 'https://script.google.com/macros/s/AKfycbyyBbDiSVytfi5nVsayi1DUmfy6j01BGjBO96bRgNnO4UiCrUe59v44VPM793-NAkv2/exec';
-const VERSAO_APP = '3.2';
-const SERVIDOR_MINIMO = '3.2';
+const VERSAO_APP = '3.2.1';
+const SERVIDOR_MINIMO = '3.2.1';
 function versaoMenor(a, b) { const x = String(a || '0').split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
 function quando(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function faturaDoMes(m) { return ((S.dados && S.dados.faturas) || []).find(h => h.mes === m); }
