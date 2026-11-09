@@ -145,6 +145,15 @@ details summary{cursor:pointer;list-style:none}
 .mescard.atual .tag.sms{background:#2563eb;color:#fff}
 .tri{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 4px}.tri span{display:block;font-size:11px;color:var(--sub)}.tri b{font-size:15px}
 .lbar{margin-top:10px}
+.dica{display:flex;gap:12px;align-items:flex-start;background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:13px 14px;margin-bottom:8px;border-left:4px solid var(--line)}
+.dica .di{font-size:22px;line-height:1.1}.dica .dt{font-weight:600;font-size:15px}.dica .dx{font-size:13px;color:var(--sub);margin-top:3px}
+.dica.alto{border-left-color:var(--bad)}.dica.medio{border-left-color:var(--b3)}.dica.ok{border-left-color:var(--ok)}.dica.info{border-left-color:var(--pri)}
+.dica .eco{margin-left:auto;white-space:nowrap;font-weight:700;color:var(--ok);font-size:14px;padding-left:8px}
+.catan{padding:12px 14px;border-top:1px solid var(--line);cursor:pointer}.catan:first-child{border-top:0}
+.catan .row{gap:8px}.catan .bar{height:8px;margin-top:7px}
+.trend{font-size:12px;font-weight:600}.trend.up{color:var(--bad)}.trend.down{color:var(--ok)}
+.an-grid{display:block}
+@media (min-width:900px){.an-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:18px;align-items:start}.an-grid h2:first-child{margin-top:4px}}
 .toolbar .search{margin-bottom:10px}
 /* ===== Computador / tablet na horizontal ===== */
 @media (min-width: 900px){
@@ -274,8 +283,8 @@ if (typeof module !== 'undefined') module.exports = { lerFaturaBradesco: lerFatu
 'use strict';
 // ============ COLE AQUI o URL do app da Web do Apps Script (termina em /exec) ============
 const SERVIDOR = 'https://script.google.com/macros/s/AKfycbyyBbDiSVytfi5nVsayi1DUmfy6j01BGjBO96bRgNnO4UiCrUe59v44VPM793-NAkv2/exec';
-const VERSAO_APP = '3.1';
-const SERVIDOR_MINIMO = '3.1';
+const VERSAO_APP = '3.2';
+const SERVIDOR_MINIMO = '3.2';
 function versaoMenor(a, b) { const x = String(a || '0').split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
 function quando(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function faturaDoMes(m) { return ((S.dados && S.dados.faturas) || []).find(h => h.mes === m); }
@@ -359,7 +368,7 @@ async function carregar(mes, silencioso) {
     if (!S.dados) { S.erro = e.message; render(); } else toast('Sem conexão: ' + e.message);
   } finally { setLoading(false); }
 }
-function invalidar() { S.cache = {}; }
+function invalidar() { S.cache = {}; S.anCache = {}; }
 async function acao(body, msg) {
   setLoading(true);
   try { const r = await apiPost(body); invalidar(); if (msg) toast(msg); await carregar(S.mes, true); return r; }
@@ -411,6 +420,7 @@ const ICON = {
   faturas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20M6 15h4"/></svg>',
   mais: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>',
   acomp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>',
+  analise: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>',
   ano: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M8 13h2M14 13h2M8 17h2M14 17h2"/></svg>'
 };
 function render() {
@@ -420,16 +430,16 @@ function render() {
     app.innerHTML = `<div class="wrap"><div class="empty">${S.erro ? '⚠️ ' + esc(S.erro) + '<br><br><button class="btn sec" onclick="S.erro=null;carregar()">Tentar de novo</button><button class="btn danger" onclick="sair()">Sair</button>' : '<span class="spin"></span>'}</div></div>`;
     return;
   }
-  const views = { inicio: vInicio, lanc: vLanc, faturas: vFaturas, mais: vMais, ano: vAno, acomp: vAcomp };
+  const views = { inicio: vInicio, lanc: vLanc, faturas: vFaturas, mais: vMais, ano: vAno, acomp: vAcomp, analise: vAnalise };
   app.innerHTML = '<div class="wrap tab-' + S.tab + '">' + views[S.tab]() + '</div>' + vTabs();
 }
 function vTabs() {
   const n = S.dados.pendentes.length;
   const b = (id, nome, cls) => `<button class="${S.tab === id ? 'on' : ''} ${cls || ''}" onclick="irTab('${id}')">${ICON[id]}${id === 'inicio' && n ? `<span class="badge">${n}</span>` : ''}${id === 'acomp' && alertasDoMes(S.dados, S.dados.hoje).length ? `<span class="badge">!</span>` : ''}<span>${nome}</span></button>`;
-  return `<nav class="tabs"><div class="brand"><span class="logo-s">🏠</span>Controle da Casa</div>${b('inicio', 'Início')}${b('lanc', 'Lançamentos')}<button class="fab" onclick="abrirNovo()" aria-label="Novo"><span class="fab-plus">+</span><span class="fab-txt">Novo lançamento</span></button>${b('acomp', 'Mês a mês', 'so-pc')}${b('ano', 'Visão anual', 'so-pc')}${b('faturas', 'Faturas')}${b('mais', 'Mais')}
+  return `<nav class="tabs"><div class="brand"><span class="logo-s">🏠</span>Controle da Casa</div>${b('inicio', 'Início')}${b('lanc', 'Lançamentos')}<button class="fab" onclick="abrirNovo()" aria-label="Novo"><span class="fab-plus">+</span><span class="fab-txt">Novo lançamento</span></button>${b('acomp', 'Mês a mês', 'so-pc')}${b('ano', 'Visão anual', 'so-pc')}${b('analise', 'Análise', 'so-pc')}${b('faturas', 'Faturas')}${b('mais', 'Mais')}
     <div class="side-foot">${esc(S.cfg.nome || '')} · <a href="#" onclick="if(confirm('Sair deste aparelho?'))sair();return false">Sair</a></div></nav>`;
 }
-function irTab(t) { S.tab = t; S.sub = null; render(); window.scrollTo(0, 0); if (t === 'ano' || t === 'acomp') carregarAno(S.anoSel || S.mes.slice(0, 4)); }
+function irTab(t) { S.tab = t; S.sub = null; render(); window.scrollTo(0, 0); if (t === 'ano' || t === 'acomp') carregarAno(S.anoSel || S.mes.slice(0, 4)); if (t === 'analise') carregarAnalise(S.anN || 6); }
 function mudaMes(k) { carregar(somaMes(S.mes, k)); }
 function vMesBar() {
   const atual = S.dados && S.dados.hoje;
@@ -617,6 +627,67 @@ function vAcomp() {
   return `<h1>Mês a mês</h1>${vAnoBar()}${conf}
     <h2>${nAlertas ? nAlertas + ' alerta' + (nAlertas > 1 ? 's' : '') + ' em ' + a.ano : 'Nenhum alerta em ' + a.ano}</h2><div class="mesgrid">${cards || '<div class="empty">Sem dados neste ano.</div>'}</div>`;
 }
+// ---------- Análise ----------
+async function carregarAnalise(n) {
+  S.anN = n;
+  S.anCache = S.anCache || {};
+  if (S.anCache[n]) { S.an = S.anCache[n]; render(); }
+  setLoading(true);
+  try { const a = await apiGet({ action: 'analise', meses: n }); S.anCache[n] = a; if (S.anN === n) { S.an = a; render(); } }
+  catch (e) { toast('Erro: ' + e.message); }
+  finally { setLoading(false); }
+}
+function verCategoria(cat) {
+  const a = S.an; if (!a || !a.meses.length) return;
+  S.mes = a.meses[a.meses.length - 1]; S.filtroCat = cat; S.busca = ''; S.filtro = 'todos';
+  S.tab = 'lanc'; carregar(S.mes); window.scrollTo(0, 0);
+}
+function vAnalise() {
+  const n = S.anN || 6, a = S.an && S.an.n === n ? S.an : null;
+  const per = `<div class="chips" style="margin-top:12px">${[3, 6, 12].map(k => `<button class="chip ${k === n ? 'on' : ''}" onclick="carregarAnalise(${k})">${k} meses</button>`).join('')}</div>`;
+  if (!a) return `<h1>Análise dos gastos</h1>${per}<div class="empty"><span class="spin"></span></div>`;
+  if (a.vazio) return `<h1>Análise dos gastos</h1>${per}<div class="empty">Ainda não há gastos lançados nesse período.</div>`;
+  const nomeM = m => MESES[+m.slice(5, 7) - 1].slice(0, 3) + '/' + m.slice(2, 4);
+  const periodo = a.meses.length === 1 ? nomeM(a.meses[0]) : nomeM(a.meses[0]) + ' a ' + nomeM(a.meses[a.meses.length - 1]);
+  const r = a.resumo;
+  const kpi = (l, v, cls, sub) => `<div class="kpi"><span>${l}</span><b class="${cls || ''}">${v}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  const kpis = `<div class="kpis">${kpi('Renda média', brl0(r.renda) + '<span class="small muted" style="font-weight:400"> /mês</span>')}${kpi('Gastos médios', brl0(r.gastos), '', r.renda ? (r.gastos / r.renda * 100).toFixed(0) + '% da renda' : '')}
+    ${kpi(r.sobra < 0 ? 'Falta por mês' : 'Sobra por mês', brl0(Math.abs(r.sobra)), r.sobra < 0 ? 'neg' : 'pos', r.renda ? Math.abs(r.poupanca).toFixed(0) + '% da renda' : '')}
+    ${kpi('Gastos fixos', brl0(r.fixos), '', r.renda ? (r.fixos / r.renda * 100).toFixed(0) + '% da renda' : '')}
+    ${kpi('Dá para economizar', brl0(r.potencial), 'pos', 'por mês, com as sugestões')}</div>`;
+  const dicas = a.dicas.map(d => `<div class="dica ${d.nivel}"><div class="di">${d.icone}</div><div class="grow"><div class="dt">${esc(d.titulo)}</div><div class="dx">${esc(d.texto)}</div></div>${d.economia ? `<div class="eco">−${brl0(d.economia)}</div>` : ''}</div>`).join('');
+  const maxP = Math.max(...a.categorias.map(c => c.pct_renda), 1);
+  const cats = a.categorias.filter(c => c.media > 0).map(c => {
+    const tr = c.variacao == null || Math.abs(c.variacao) < 10 ? '' : `<span class="trend ${c.variacao > 0 ? 'up' : 'down'}">${c.variacao > 0 ? '▲' : '▼'} ${Math.abs(c.variacao).toFixed(0)}%</span>`;
+    const tag = c.categoria === 'Sem categoria' ? '<span class="tag warn">classificar</span>' : c.corte >= 0.2 ? '<span class="tag warn">dá para reduzir</span>' : c.corte > 0 ? '<span class="tag">dá para ajustar</span>' : '<span class="tag ok">essencial</span>';
+    const cor = COR[c.balde] || 'var(--pri)';
+    return `<div class="catan" onclick="verCategoria('${esc(c.categoria)}')"><div class="row"><span style="font-size:18px">${c.icone}</span><b class="grow" style="font-size:15px">${esc(c.categoria)} ${tag}</b>${tr}<b style="white-space:nowrap">${brl0(c.media)}</b></div>
+      <div class="bar"><i style="width:${Math.max(1, c.pct_renda / maxP * 100)}%;background:${cor}"></i></div>
+      <div class="row small muted" style="margin-top:5px"><span class="grow">${c.pct_renda.toFixed(1).replace('.', ',')}% da renda · ${c.pct_gastos.toFixed(0)}% dos gastos</span>${c.economia ? `<span style="color:var(--ok)">economia possível ${brl0(c.economia)}/mês</span>` : ''}</div></div>`;
+  }).join('');
+  const baldes = a.baldes.filter(b => b.media > 0).map(b => `<div style="margin:10px 0"><div class="row small"><b class="grow">${NOME_BALDE[b.balde] || b.balde}</b><span>${brl0(b.media)} · <b>${b.pct.toFixed(0)}%</b>${b.ideal != null ? ` <span class="muted">(ideal ${b.ideal}%)</span>` : ''}</span></div>
+      <div class="bar" style="margin-top:6px"><i style="width:${Math.min(100, b.pct)}%;background:${COR[b.balde] || 'var(--pri)'}"></i>${b.ideal != null ? `<span class="ideal" style="left:${b.ideal}%"></span>` : ''}</div></div>`).join('');
+  const lojas = a.lojas.map((l, i) => `<div class="item" style="cursor:default"><div class="ico" style="font-size:13px;font-weight:700">${i + 1}º</div><div class="grow"><div class="t">${esc(l.nome)}</div><div class="s">${esc(l.categoria)} · ${l.qtd} ${l.qtd > 1 ? 'lançamentos' : 'lançamento'} em ${l.meses} ${l.meses > 1 ? 'meses' : 'mês'}</div></div><div class="right"><div class="v">${brl0(l.media)}<span class="small muted" style="font-weight:400">/mês</span></div><div class="small muted">${brl0(l.total)} no período</div></div></div>`).join('');
+  const ass = a.assinaturas.length ? `<h2>📺 Assinaturas</h2><div class="list">${a.assinaturas.map(x => `<div class="item" style="cursor:default"><div class="grow"><div class="t">${esc(x.nome)}</div><div class="s">em ${x.meses} ${x.meses > 1 ? 'meses' : 'mês'}</div></div><div class="v">${brl0(x.media)}<span class="small muted" style="font-weight:400">/mês</span></div></div>`).join('')}
+      <div class="item" style="cursor:default"><b class="grow">Total</b><b>${brl0(a.assinaturas.reduce((s, x) => s + x.media, 0))}/mês</b></div></div>` : '';
+  const comp = a.comprometido.some(c => c.total > 0) ? `<h2>📆 Renda já comprometida com parcelas</h2><div class="card">${a.comprometido.map(c => `<div style="margin:8px 0"><div class="row small"><span class="grow" style="text-transform:capitalize">${MESES[+c.mes.slice(5, 7) - 1]}${c.mes === a.hoje ? ' <span class="tag sms">mês atual</span>' : ''}</span><span>${brl0(c.total)} · <b>${c.pct.toFixed(0)}%</b></span></div>
+      <div class="bar" style="margin-top:6px"><i style="width:${Math.min(100, c.pct)}%;background:${c.pct >= 35 ? 'var(--bad)' : c.pct >= 20 ? 'var(--b3)' : 'var(--ok)'}"></i></div></div>`).join('')}
+      <p class="small muted" style="margin:8px 0 0">Parcelas a partir da 2ª que já vão cair em cada mês, em relação à renda média.</p></div>` : '';
+  const peq = a.pequenos.qtd / a.meses.length >= 3 ? `<div class="card" style="margin-top:8px"><div class="row"><span style="font-size:22px">🐜</span><div class="grow"><b>Gastos pequenos (até R$ 50)</b><div class="small muted">${Math.round(a.pequenos.qtd / a.meses.length)} compras por mês, em média</div></div><b>${brl0(a.pequenos.media)}/mês</b></div></div>` : '';
+  return `<h1>Análise dos gastos</h1>${per}
+    <p class="small muted" style="margin:0 4px 12px">Média por mês de ${periodo} (${a.meses.length} ${a.meses.length > 1 ? 'meses fechados' : 'mês fechado'}). O mês da fatura em aberto não entra.</p>
+    ${kpis}
+    <div class="an-grid" style="margin-top:6px"><div>
+      <h2>💡 Onde dá para economizar</h2>${dicas || '<div class="empty">Nada a destacar neste período.</div>'}
+      <h2>🏪 Onde você mais gasta</h2><div class="list">${lojas}</div>
+      ${peq}
+    </div><div>
+      <h2>📊 O que mais consome sua renda</h2><div class="list">${cats}</div>
+      <h2>Divisão pela renda <span style="text-transform:none;letter-spacing:0;font-weight:400">· traço = ideal</span></h2><div class="card">${baldes}</div>
+      ${ass}${comp}
+    </div></div>
+    <p class="small muted" style="margin:16px 4px">As sugestões são estimativas: um corte de 20% a 30% em restaurantes, lazer, compras online, vestuário, beleza, viagens e assinaturas, de 10% em mercado, transporte, farmácia e casa, e o fim das taxas do cartão. Moradia, educação, saúde e funcionária não entram como corte. Toque numa classificação para ver os lançamentos.</p>`;
+}
 async function salvarLimite() {
   const v = $('#limC').value.trim(), p = $('#pctC').value.trim() || '80';
   try {
@@ -755,6 +826,7 @@ function vMais() {
   const smsResumo = st.ultimo ? 'Último recebido ' + haQuanto(st.ultimo.criado) + ' · ' + esc(st.ultimo.descricao)
     : (st.em ? '⚠️ Chegou mensagem ' + haQuanto(st.em) + ', mas não foi reconhecida' : 'Nenhum SMS recebido pelo atalho ainda');
   return `<h1>Mais</h1><div class="list menu" style="margin-top:14px">
+    ${it2('analise', '💡', 'Análise dos gastos', 'Para onde vai a renda e onde dá para economizar')}
     ${it2('acomp', '📈', 'Mês a mês e alertas', S.dados.config.limite_cartao ? 'Limite dos cartões: ' + brl0(S.dados.config.limite_cartao) : 'Configure o limite dos cartões')}
     ${it2('ano', '🗓️', 'Visão anual', 'Salários, fixos e cartões mês a mês')}
     ${it('sms', st.ultimo ? '📩' : '📭', 'Leitura de SMS', smsResumo)}
